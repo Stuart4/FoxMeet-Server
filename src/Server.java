@@ -1,4 +1,5 @@
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
@@ -7,6 +8,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 
 import static java.sql.DriverManager.getConnection;
 
@@ -21,19 +23,34 @@ public class Server implements Runnable{
 
     public void run() {
 
+        Connection connection = null;
+        PrintWriter pw = null;
+        BufferedReader br = null;
+
         try {
+            connection = getConnection("jdbc:mysql://localhost:3306/FoxMeet", "root", "6thfloorhomies");
+            pw = new PrintWriter(sock.getOutputStream());
+            br = new BufferedReader(new InputStreamReader(sock.getInputStream()));
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return;
+        } catch (IOException e) {
+            System.err.println("Some weird reader/writer issue");
+            return;
+        }
 
-            Connection connection =  getConnection("jdbc:mysql://localhost:3306/FoxMeet", "root", "6thfloorhomies");
-            PrintWriter pw = new PrintWriter(sock.getOutputStream());
-            BufferedReader br = new BufferedReader(new InputStreamReader(sock.getInputStream()));
-            String command = br.readLine().trim();
+        PreparedStatement preparedStatement;
+        ResultSet res;
+        int id = 0;
+        String email ="";
+        ArrayList<Integer> event_id = new ArrayList<Integer>();
+        ArrayList<Integer> poll_id = new ArrayList<Integer>();
 
-            PreparedStatement preparedStatement;
-            ResultSet res;
-            int id = 0;
-
+        // Accepting the initial email address and initializing new members. COnverting the email address into user-ids.
+        try {
+            email = br.readLine().trim();
             preparedStatement = connection.prepareStatement("SELECT userID FROM Users WHERE emailID = ?;");
-            preparedStatement.setString(1, command.trim());
+            preparedStatement.setString(1, email.trim());
             res = preparedStatement.executeQuery();
             String ids;
             while(res.next()) {
@@ -45,18 +62,174 @@ public class Server implements Runnable{
                 res = preparedStatement.executeQuery();
                 while (res.next())
                     id = ((res.getInt("max(userID)")) + 1);
-                preparedStatement = connection.prepareStatement("INSERT INTO Users VALUES ( ? ,  ?);");
+                preparedStatement = connection.prepareStatement("INSERT INTO Users VALUES (?, ?);");
                 preparedStatement.setString(1, String.valueOf(id));
-                preparedStatement.setString(2, command);
+                preparedStatement.setString(2, email);
                 preparedStatement.executeUpdate();
             }
-            System.out.print(id);
         } catch (SQLException e) {
             e.printStackTrace();
+            try {
+                pw.println("Error! Please try again later!");
+                pw.flush();
+                pw.close();
+                br.close();
+                connection.close();
+                sock.close();
+            } catch (IOException e1) {
+                e1.printStackTrace();
+            } catch (SQLException e1) {
+                e1.printStackTrace();
+            }
+            return;
+
         } catch (Exception fuckOff) {
-            System.err.println("There is an error! You Motherfucking fool");
+            fuckOff.printStackTrace();
+            try {
+                pw.println("Error! Please try again later!");
+                pw.flush();
+                pw.close();
+                br.close();
+                connection.close();
+                sock.close();
+            } catch (IOException e1) {
+                e1.printStackTrace();
+            } catch (SQLException e1) {
+                e1.printStackTrace();
+            }
+            return;
         }
+
+        // Trying to find events and sorting them into unconfirmed and unconfirmed events
+        try {
+            preparedStatement = connection.prepareStatement("SELECT event_ID , voted FROM Event_Att WHERE Event_Att.user_ID = ?");
+            preparedStatement.setString(1, String.valueOf(id));
+            res = preparedStatement.executeQuery();
+            String ids = "";
+            int temp = 0;
+
+            while(res.next()) {
+                ids = res.getString(1);
+                temp = Integer.parseInt(ids);
+                if (temp == 0)
+                    break;
+                if (res.getBoolean(2))
+                    event_id.add(temp);
+                else
+                    poll_id.add(temp);
+            }
+
+            // Checking the event_ids and sending them to the device
+
+            if (!event_id.isEmpty()) {
+                String resp = "";
+                for (int i = 0 ; i < event_id.size() ; i++) {
+                    preparedStatement = connection.prepareStatement("SELECT * FROM Events WHERE eventID = ?;");
+                    preparedStatement.setString(1 , String.valueOf(event_id.get(i)));
+                    res = preparedStatement.executeQuery();
+                    while(res.next()) {
+                        resp += res.getString(1) + "," + res.getString(2) + ",";
+                        String t = res.getString(3);
+                        if (t == null)
+                            resp += "Deciding,Deciding," + res.getString(5) + ",";
+                        else
+                            resp += t + "," + res.getString(4) + "," + res.getString(5) + ",";
+                    }
+
+                    preparedStatement = connection.prepareStatement("SELECT user_ID  FROM Event_Att WHERE Event_Att.event_ID = ?");
+                    preparedStatement.setString(1 , String.valueOf(event_id.get(i)));
+                    res = preparedStatement.executeQuery();
+                    while(res.next()) {
+                        PreparedStatement ps = connection.prepareStatement("SELECT emailID FROM Users WHERE userID = ?;" );
+                        ps.setString(1 , res.getString(1));
+                        ResultSet rs = ps.executeQuery();
+                        while (rs.next())
+                            resp += rs.getString(1) + ",";
+                    }
+                    resp += ";";
+                }
+                System.out.println(resp);
+                pw.println(resp);
+                pw.flush();
+            }
+
+
+//NEed to send the time slots, not done yet.
+
+           else if (!poll_id.isEmpty()) {
+                String resp = "";
+                for (int i = 0 ; i < poll_id.size() ; i++) {
+                    preparedStatement = connection.prepareStatement("SELECT * FROM Events WHERE eventID = ?;");
+                    preparedStatement.setString(1 , String.valueOf(poll_id.get(i)));
+                    res = preparedStatement.executeQuery();
+
+                    while(res.next()) {
+
+                        resp += res.getString(1) + "," + res.getString(2) + ",";
+
+                        PreparedStatement ps =  connection.prepareStatement("SELECT COUNT(*) FROM Event_T"+poll_id.get(i));
+                        ResultSet rs = ps.executeQuery();
+                        while (rs.next())
+                            resp += rs.getString(1) + ",";
+                        ps = connection.prepareStatement("SELECT * FROM Event_T"+poll_id.get(i));
+                        rs = ps.executeQuery();
+                        while (rs.next())
+                            resp += rs.getString(1) + "," + rs.getString(2) + ",";
+                        resp += res.getString(5) + ",";
+
+                    }
+
+                    preparedStatement = connection.prepareStatement("SELECT user_ID  FROM Event_Att WHERE Event_Att.event_ID = ?");
+                    preparedStatement.setString(1 , String.valueOf(poll_id.get(i)));
+                    res = preparedStatement.executeQuery();
+                    while(res.next()) {
+                        PreparedStatement ps = connection.prepareStatement("SELECT emailID FROM Users WHERE userID = ?;" );
+                        ps.setString(1 , res.getString(1));
+                        ResultSet rs = ps.executeQuery();
+                        while (rs.next())
+                            resp += rs.getString(1) + ",";
+                    }
+                    resp += ";";
+                }
+                System.out.println(resp);
+                pw.println(resp);
+                pw.flush();
+            } else {
+                pw.println("No events found;");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            try {
+                pw.println("Error! Please try again later!");
+                pw.flush();
+                pw.close();
+                br.close();
+                connection.close();
+                sock.close();
+            } catch (IOException e1) {
+                e1.printStackTrace();
+            } catch (SQLException e1) {
+                e1.printStackTrace();
+            }
+            return;
+        } catch (Exception fuckOff) {
+            fuckOff.printStackTrace();
+            try {
+                pw.println("Error! Please try again later!");
+                pw.flush();
+                pw.close();
+                br.close();
+                connection.close();
+                sock.close();
+            } catch (IOException e1) {
+                e1.printStackTrace();
+            } catch (SQLException e1) {
+                e1.printStackTrace();
+            }
+        }
+
     }
+
 
     public static void main(String[] args) throws SQLException {
         try {
@@ -72,7 +245,7 @@ public class Server implements Runnable{
             }
 
         } catch (Exception dontCare) {
-            System.err.println("There is an error! I honestly don't care.");
+            dontCare.printStackTrace();
         }
     }
 }
