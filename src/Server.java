@@ -26,48 +26,35 @@ public class Server implements Runnable{
             Connection connection =  getConnection("jdbc:mysql://localhost:3306/FoxMeet", "root", "6thfloorhomies");
             PrintWriter pw = new PrintWriter(sock.getOutputStream());
             BufferedReader br = new BufferedReader(new InputStreamReader(sock.getInputStream()));
-            String command = br.readLine();
-            String[] commands = command.split(",");
+            String command = br.readLine().trim();
 
             PreparedStatement preparedStatement;
             ResultSet res;
-            double id = 0;
-
-            System.out.println(command);
+            int id = 0;
 
             preparedStatement = connection.prepareStatement("SELECT userID FROM Users WHERE emailID = ?;");
-            preparedStatement.setString(1 , commands[0].trim());
+            preparedStatement.setString(1, command.trim());
             res = preparedStatement.executeQuery();
             String ids;
-            try {
-                while(res.next()) {
-                    ids = res.getString(1);
-                    id = Double.parseDouble(ids);
-                }
-
-            } catch (Exception e) {
+            while(res.next()) {
+                ids = res.getString(1);
+                id = Integer.parseInt(ids);
+            }
+            if (id == 0) {
                 preparedStatement = connection.prepareStatement("SELECT max(userID) FROM Users;");
                 res = preparedStatement.executeQuery();
                 while (res.next())
-                    id =(res.getDouble("max(userID)")) + 1;
-                preparedStatement = connection.prepareStatement("INSERT INTO Users VALUES ( ? , ?);");
-                preparedStatement.setString(1 , String.valueOf(id));
-                preparedStatement.setString(2 , commands[0]);
+                    id = ((res.getInt("max(userID)")) + 1);
+                preparedStatement = connection.prepareStatement("INSERT INTO Users VALUES ( ? ,  ?);");
+                preparedStatement.setString(1, String.valueOf(id));
+                preparedStatement.setString(2, command);
                 preparedStatement.executeUpdate();
             }
-            System.out.println(id);
-
-            if (commands[1].equals("E")) {
-                preparedStatement = connection.prepareStatement(" SELECT eventID ");
-            }
-
-
-
-
+            System.out.print(id);
         } catch (SQLException e) {
             e.printStackTrace();
         } catch (Exception fuckOff) {
-            System.err.println("error");
+            System.err.println("There is an error! You Motherfucking fool");
         }
     }
 
@@ -85,7 +72,7 @@ public class Server implements Runnable{
             }
 
         } catch (Exception dontCare) {
-            main(args);
+            System.err.println("There is an error! I honestly don't care.");
         }
     }
 }
