@@ -1,15 +1,15 @@
 import java.sql.Connection;
-import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.sql.Statement;
 
+import static java.sql.DriverManager.getConnection;
 
 public class Temp {
     public static void main(String[] args) throws SQLException {
-        Connection connection = DriverManager.getConnection("jdbc:mysql://localhost:3306/FoxMeet", "root", "6thfloorhomies");
-        Statement stmt = connection.createStatement();
-        System.out.print(stmt.executeUpdate("SELECT * from users;"));
-        stmt.close();
-        connection.close();
+        PreparedStatement preparedStatement;
+        Connection connection =  getConnection("jdbc:mysql://localhost:3306/FoxMeet", "root", "6thfloorhomies");
+        preparedStatement = connection.prepareStatement("INSERT INTO Event_T1 VALUES (321223 , 431232 , 0)");
+        preparedStatement.executeUpdate();
+
     }
 }

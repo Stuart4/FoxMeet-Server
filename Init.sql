@@ -1,0 +1,27 @@
+CREATE DATABASE FoxMeet;
+
+USE FoxMeet;
+
+CREATE TABLE Users
+(
+	userID int NOT NULL PRIMARY KEY,
+	emailID varchar(255) NOT NULL UNIQUE
+);
+
+CREATE TABLE Events
+(
+	eventID int NOT NULL PRIMARY KEY ,
+	location varchar(240) ,
+	event name varchar(240) NOT NULL ,
+	start int ,
+	end int
+);
+
+CREATE TABLE Event_Att
+(
+	user_id int NOT NULL,
+	event_id int NOT NULL,
+	voted BOOLEAN DEFAULT FALSE ,
+	FOREIGN KEY (user_id) REFERENCES Users(userID),
+	FOREIGN KEY (event_id) REFERENCES Events(eventID)
+);
