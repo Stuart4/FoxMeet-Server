@@ -145,6 +145,7 @@ public class Server implements Runnable{
                 preparedStatement.setString(1, String.valueOf(id));
                 preparedStatement.setString(2, email);
                 preparedStatement.executeUpdate();
+                pw.println("new id created!");
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -275,6 +276,7 @@ public class Server implements Runnable{
                 pw.flush();
             } else {
                 pw.println("No events found;");
+                pw.flush();
             }
             pw.close();
             br.close();
