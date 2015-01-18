@@ -1,2 +1,2 @@
-service mysql start
-mysql -u root -p
+sudo service mysql start
+mysql -u root -p/et

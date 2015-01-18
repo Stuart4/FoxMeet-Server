@@ -13,8 +13,9 @@ CREATE TABLE Events
 	eventID int NOT NULL PRIMARY KEY ,
 	location varchar(240) ,
 	start int,
-	end int
-	event name varchar(240) NOT NULL
+	end int,
+	event_name varchar(240) NOT NULL,
+	date varchar(50) NOT NULL
 );
 
 CREATE TABLE Event_Att

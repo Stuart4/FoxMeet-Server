@@ -26,11 +26,18 @@ public class Server implements Runnable{
         Connection connection = null;
         PrintWriter pw = null;
         BufferedReader br = null;
+        PreparedStatement preparedStatement;
+        ResultSet res;
+        int id = 0;
+        String email = "";
+        ArrayList<Integer> event_id = new ArrayList<Integer>();
+        ArrayList<Integer> poll_id = new ArrayList<Integer>();
 
         try {
             connection = getConnection("jdbc:mysql://localhost:3306/FoxMeet", "root", "6thfloorhomies");
             pw = new PrintWriter(sock.getOutputStream());
             br = new BufferedReader(new InputStreamReader(sock.getInputStream()));
+            email = br.readLine().trim();
         } catch (SQLException e) {
             e.printStackTrace();
             return;
@@ -39,16 +46,88 @@ public class Server implements Runnable{
             return;
         }
 
-        PreparedStatement preparedStatement;
-        ResultSet res;
-        int id = 0;
-        String email ="";
-        ArrayList<Integer> event_id = new ArrayList<Integer>();
-        ArrayList<Integer> poll_id = new ArrayList<Integer>();
+       if (email.charAt(0) == '@') {
+            ArrayList<Integer> client_id = new ArrayList<Integer>();
+            String commands[] = email.split(",");
+            String date = commands[2] +"/" +commands[3] +"/"+ commands[4];
+            for (int i = 7 ; i < commands.length ; i++) {
+                try {
+                    preparedStatement = connection.prepareStatement("SELECT userID FROM Users WHERE emailID = ?;");
+                    preparedStatement.setString(1, commands[i].trim());
+                    res = preparedStatement.executeQuery();
+                    String ids;
+                    while(res.next()) {
+                        ids = res.getString(1);
+                        id = Integer.parseInt(ids);
+                    }
+                    if (id == 0) {
+                        preparedStatement = connection.prepareStatement("SELECT max(userID) FROM Users;");
+                        res = preparedStatement.executeQuery();
+                        while (res.next())
+                            id = ((res.getInt("max(userID)")) + 1);
+                        preparedStatement = connection.prepareStatement("INSERT INTO Users VALUES (?, ?);");
+                        preparedStatement.setString(1, String.valueOf(id));
+                        preparedStatement.setString(2, email);
+                        preparedStatement.executeUpdate();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    return;
+                }
+                client_id.add(id);
+            }
+            try {
+                preparedStatement = connection.prepareStatement("SELECT max(eventID) FROM Events;");
+                res = preparedStatement.executeQuery();
+                while (res.next())
+                    id = ((res.getInt("max(eventID)")) + 1);
+                preparedStatement = connection.prepareStatement("INSERT INTO Events VALUES (?,?,?,?,?,?);");
+                preparedStatement.setString(1, String.valueOf(id));
+                preparedStatement.setString(2, commands[6]);
+                preparedStatement.setString(3, null);
+                preparedStatement.setString(4, null);
+                preparedStatement.setString(5, commands[5]);
+                preparedStatement.setString(6, date);
+                preparedStatement.executeUpdate();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+
+            for (int i = 0 ; i < client_id.size() ; i++) {
+                try {
+                    preparedStatement = connection.prepareStatement("INSERT INTO Event_Att VALUES (?,?,?);");
+                    preparedStatement.setString(1, String.valueOf(client_id.get(i)));
+                    preparedStatement.setString(2 , String.valueOf(id));
+                    preparedStatement.setString(3 , String.valueOf(0));
+                    preparedStatement.executeUpdate();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+            try {
+                br.close();
+                connection.close();
+                sock.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+           try {
+               pw.close();
+               br.close();
+               connection.close();
+               sock.close();
+           }catch (Exception e) {
+               e.printStackTrace();
+           }
+            return;
+        }
 
         // Accepting the initial email address and initializing new members. COnverting the email address into user-ids.
         try {
-            email = br.readLine().trim();
+           // email = br.readLine().trim();
+            System.out.println(email);
             preparedStatement = connection.prepareStatement("SELECT userID FROM Users WHERE emailID = ?;");
             preparedStatement.setString(1, email.trim());
             res = preparedStatement.executeQuery();
@@ -197,6 +276,10 @@ public class Server implements Runnable{
             } else {
                 pw.println("No events found;");
             }
+            pw.close();
+            br.close();
+            connection.close();
+            sock.close();
         } catch (SQLException e) {
             e.printStackTrace();
             try {
